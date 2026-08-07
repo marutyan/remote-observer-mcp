@@ -53,6 +53,7 @@ class HostConfig:
     host_id: str
     transport: str
     ssh_alias: str | None
+    tmux_user: str | None
     gpu: bool
     services: Mapping[str, ServiceConfig]
     repos: Mapping[str, RepoConfig]
@@ -118,7 +119,16 @@ def load_config(path: Path) -> AppConfig:
 def _parse_host(host_id: str, raw: Mapping[str, Any]) -> HostConfig:
     _ensure_keys(
         raw,
-        {"transport", "ssh_alias", "gpu", "services", "repos", "containers", "processes"},
+        {
+            "transport",
+            "ssh_alias",
+            "tmux_user",
+            "gpu",
+            "services",
+            "repos",
+            "containers",
+            "processes",
+        },
         f"host {host_id}",
     )
     transport = raw.get("transport")
@@ -133,6 +143,13 @@ def _parse_host(host_id: str, raw: Mapping[str, Any]) -> HostConfig:
     elif ssh_alias is not None:
         _invalid(f"host {host_id}: local transport must not define ssh_alias")
 
+    tmux_user = raw.get("tmux_user")
+    if tmux_user is not None:
+        if not isinstance(tmux_user, str) or not _ID_RE.fullmatch(tmux_user):
+            _invalid(f"host {host_id}: tmux_user must be a safe local user identifier")
+        if transport != "local":
+            _invalid(f"host {host_id}: tmux_user is supported only for local transport")
+
     gpu = raw.get("gpu", False)
     if not isinstance(gpu, bool):
         _invalid(f"host {host_id}: gpu must be boolean")
@@ -141,6 +158,7 @@ def _parse_host(host_id: str, raw: Mapping[str, Any]) -> HostConfig:
         host_id=host_id,
         transport=transport,
         ssh_alias=ssh_alias,
+        tmux_user=tmux_user,
         gpu=gpu,
         services=_parse_services(raw.get("services", {}), host_id),
         repos=_parse_repos(raw.get("repos", {}), host_id),

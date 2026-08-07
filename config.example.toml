@@ -7,6 +7,10 @@
 [hosts.gateway]
 transport = "local"
 
+# Optional: observe one fixed local OS user's tmux through the dedicated
+# root-owned read-only helper and narrow sudoers rule documented in deploy/.
+# tmux_user = "exampleuser"
+
 [hosts.remote]
 transport = "ssh"
 ssh_alias = "example-host"
