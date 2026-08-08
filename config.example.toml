@@ -1,0 +1,25 @@
+# Copy to ~/.config/remote-observer-mcp/config.toml and replace logical examples.
+# Do not put passwords, private keys, API tokens, or other secret values here.
+
+[hosts.gateway]
+transport = "local"
+
+[hosts.remote]
+transport = "ssh"
+ssh_alias = "example-host"
+gpu = true
+
+[hosts.remote.services.example]
+unit = "example.service"
+logs = false
+
+[hosts.remote.repos.example]
+path = "/srv/example"
+secret_patterns = [".env", ".env.*", "*.pem", "*.key", "secrets/**"]
+
+[hosts.remote.containers.example]
+name = "example-container"
+logs = false
+
+[hosts.remote.processes.example]
+name = "example-process"
