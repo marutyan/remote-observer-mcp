@@ -14,11 +14,12 @@ The system separates observation from mutation. This repository owns only observ
 
 - No additional paid ChatGPT plan is assumed.
 - The intended ChatGPT Pro path is custom MCP with read/fetch permissions; full write/modify MCP is not assumed available.
+- Before any real Secure MCP Tunnel traffic is used, Phase 0 must confirm that the user's actual account can use the required tunnel path without unwanted additional charges. If unavoidable extra cost is discovered, tunnel integration stops until the architecture is reconsidered.
 - The MCP server may run on a Mac during development and on a long-lived gateway in production.
 - The first production gateway candidate is `emma`, but the implementation must not depend on that host name.
 - Existing SSH configuration and host authentication are reused; the repository must not contain credentials, tokens, private keys, or literal secret values.
 - Public MCP tools must not accept arbitrary shell commands, arbitrary remote hostnames, or arbitrary filesystem paths.
-- A user-provided string must never become shell syntax through interpolation.
+- A user-provided string must never become executable shell syntax through interpolation.
 
 ## 3. Non-goals
 
@@ -63,6 +64,11 @@ The gateway is a deployment role, not a hard-coded machine. The same server must
 
 The OpenAI `tunnel-client` supports a local stdio MCP command and requires a tunnel ID plus a runtime API key. The preferred initial integration is therefore to let `tunnel-client` spawn `remote-observer-mcp` as a stdio child instead of exposing an additional HTTP listener.
 
+Relevant upstream references:
+
+- OpenAI ChatGPT developer mode / MCP app documentation: `https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt`
+- OpenAI Secure MCP Tunnel client: `https://github.com/openai/tunnel-client`
+
 ## 5. Trust boundaries
 
 ### 5.1 ChatGPT to MCP
@@ -83,13 +89,17 @@ Unknown IDs fail closed. The request may not supply an SSH hostname, IP address,
 
 ### 5.3 Gateway to SSH host
 
-The server invokes the system SSH client using an argv-based process API, not a shell. Baseline options should include:
+The gateway launches the system SSH client with an argv-based local process API so no local shell parses model-provided values. Baseline options should include:
 
 - `BatchMode=yes`;
 - `StrictHostKeyChecking=yes`;
 - bounded `ConnectTimeout`;
 - no password prompting;
 - no implicit host-key acceptance.
+
+OpenSSH commonly executes the remote command through the remote account's login shell. Therefore local argv construction alone is not a sufficient remote-command security boundary. Every value incorporated into a remote command must be either a fixed implementation constant or trusted configuration that passes strict observer-specific validation/encoding. Model-provided free-form text is never incorporated into remote command syntax.
+
+Configured identifiers such as systemd units and container names use narrow character allowlists. Configured repository paths must be absolute and must satisfy a deliberately restricted safe-path grammar for v1; paths containing shell metacharacters, control characters, or unsupported whitespace are rejected rather than escaped permissively.
 
 SSH credentials remain in the operator's existing SSH setup (`~/.ssh/config`, ssh-agent, known_hosts, or equivalent host-managed mechanisms). They are never copied into repository configuration.
 
@@ -103,7 +113,8 @@ Example:
 service_status(host="emma", service="callbot")
     -> host registry lookup
     -> service registry lookup
-    -> fixed argv for systemctl status
+    -> validate configured unit identifier
+    -> fixed systemctl command form
     -> SSH runner
     -> bounded/sanitized result
 ```
@@ -131,6 +142,9 @@ unit = "callbot.service"
 [hosts.emma.repos.paperapp]
 path = "/configured/path/to/paperapp"
 
+[hosts.emma.containers.api]
+name = "paperapp-api"
+
 [hosts.gpu1]
 transport = "ssh"
 ssh_alias = "gpu1"
@@ -139,7 +153,7 @@ gpu = true
 
 A local gateway target can use a separate transport such as `local`; observers must otherwise use the same typed interface.
 
-Configuration validation must reject duplicate IDs, empty aliases, unsupported transports, relative repository paths where absolute paths are required, and malformed observer-specific entries.
+Configuration validation must reject duplicate IDs, empty aliases, unsupported transports, relative repository paths where absolute paths are required, unsafe remote-command characters, and malformed observer-specific entries.
 
 ## 7. MCP tool surface
 
@@ -176,9 +190,10 @@ The v1 surface is intentionally small. Tool names are semantic and each tool has
 ### Docker
 
 - `container_list(host)`
-  - only if Docker observation is enabled and already permitted for the gateway user.
+  - returns status only for containers registered for that host;
+  - does not enumerate unregistered containers.
 - `container_logs(host, container, lines)`
-  - container must be registered or resolved from a separately defined allowed container set;
+  - container must be registered;
   - bounded lines;
   - no `docker inspect` in v1 because it can expose environment values and secrets.
 
@@ -227,7 +242,7 @@ Owns semantic interpretation such as "service status" or "git status" and reques
 
 ### Command builder
 
-Returns an argv representation. It never returns a user-editable shell script.
+Returns a structured local command description and, for SSH transport, a remote command assembled only from fixed tokens plus strictly validated registry values. It never accepts a user-editable shell script.
 
 ### Transport runner
 
@@ -245,9 +260,10 @@ Read-only behavior is enforced in several layers:
 2. no arbitrary-command tool exists;
 3. hosts/resources come from allowlisted local configuration;
 4. command builders contain fixed command forms;
-5. transport execution uses argv without a shell;
-6. tests exercise injection-shaped inputs and ensure they are rejected or remain data;
-7. MCP read-only annotations are added as descriptive metadata, not relied on for enforcement.
+5. local process execution does not invoke a local shell;
+6. SSH remote arguments are fixed or strictly validated before they reach the remote login shell;
+7. tests exercise injection-shaped model input and unsafe configuration values;
+8. MCP read-only annotations are added as descriptive metadata, not relied on for enforcement.
 
 Commands with possible side effects are excluded even when usually used diagnostically. If an observer cannot be implemented without a meaningful mutation risk, it is not included in this server.
 
@@ -267,6 +283,8 @@ The initial policy prohibits observers that read:
 - Git remote URLs.
 
 `repo_diff` excludes configured secret-pattern paths and common sensitive names. The implementation also performs best-effort output redaction for common credential/token patterns. Redaction is a secondary defense and must not justify adding unsafe collection commands.
+
+Service/container logs may themselves contain application secrets or personal data. Log observation is therefore opt-in per registered resource, is bounded, passes through redaction, and remains an acknowledged residual risk.
 
 Any suspected secret detection should replace the value with a marker rather than returning a partial token.
 
@@ -303,7 +321,22 @@ Errors are normalized into categories that are useful to ChatGPT without disclos
 
 Responses should preserve enough sanitized stderr/diagnostic detail to explain operational failures but must not dump environment/configuration wholesale.
 
-## 13. Deployment lifecycle
+Observer-specific non-zero statuses that represent normal state (for example an inactive service) should be normalized as observation data rather than automatically treated as transport failure.
+
+## 13. Audit logging
+
+The gateway records a local metadata-only audit event for every tool call:
+
+- timestamp;
+- tool name;
+- logical host/resource IDs;
+- duration;
+- success/error category;
+- whether output was truncated or redacted.
+
+Raw stdout/stderr, secrets, SSH arguments containing sensitive values, and full log/diff content are not written to the audit record. The audit mechanism must not become a second copy of observed sensitive data.
+
+## 14. Deployment lifecycle
 
 ### Phase A: local development
 
@@ -313,13 +346,15 @@ Run on the Mac and observe one test SSH host. A local tmux session may be used t
 
 Move the same configuration model and binary/package to a long-lived gateway. Use tmux only as a temporary operational wrapper while SSH reachability, tunnel connectivity, and behavior are validated.
 
+Before the first real Secure MCP Tunnel tool call, confirm account availability and charging behavior. If the required path introduces unwanted additional cost, stop at this gate rather than silently consuming billable API usage.
+
 ### Phase C: managed service
 
 Replace tmux with the host's service manager (expected systemd on a Linux gateway). The service must use automatic restart, explicit dependencies as needed, bounded permissions, and journal-based logs. Runtime API keys are provided through a host secret mechanism or environment reference and never committed.
 
 The MCP implementation must not encode a dependency on tmux or systemd; these belong to deployment packaging.
 
-## 14. Testing strategy
+## 15. Testing strategy
 
 ### Unit tests
 
@@ -329,6 +364,7 @@ The MCP implementation must not encode a dependency on tmux or systemd; these be
 - input bounds;
 - output truncation;
 - redaction;
+- audit metadata generation;
 - normalized error mapping.
 
 ### Injection/security tests
@@ -343,13 +379,14 @@ $(...)
 newline/control-character payloads
 ```
 
-Unknown host, service, repository, process, or container IDs must fail before transport invocation.
+Unknown host, service, repository, process, or container IDs must fail before transport invocation. Unsafe values placed in local test configuration must fail validation before SSH invocation.
 
 ### Integration tests
 
 Use a fake SSH executable/transport fixture for deterministic tests of:
 
-- argv construction;
+- local SSH argv construction;
+- remote-command encoding/validation;
 - timeout;
 - non-zero exits;
 - connection/auth failures;
@@ -374,12 +411,12 @@ After unit/integration tests pass:
 
 1. local observer only;
 2. one disposable/approved SSH target;
-3. Secure MCP Tunnel discovery and one benign tool call;
+3. after the no-extra-cost gate passes, Secure MCP Tunnel discovery and one benign tool call;
 4. gateway relocation smoke test.
 
 Real-host smoke tests are never represented as completed unless their command/environment/output is actually observed.
 
-## 15. Implementation phases
+## 16. Implementation phases
 
 Implementation work should be split into numbered Issues/PRs so each PR has one reviewable outcome. After this design is approved, the implementation plan should decompose at least the following outcomes:
 
@@ -398,7 +435,7 @@ Independent observer implementations may proceed in parallel only after their sh
 
 No squash merge is to be used. Commits should remain logical review units and carry the owning Issue number.
 
-## 16. User-decision batching
+## 17. User-decision batching
 
 Implementation should continue through tasks that do not need local credentials, infrastructure access, destructive actions, installation, or policy changes. Items requiring user judgment or local interaction are collected rather than interrupting unrelated work.
 
@@ -415,7 +452,7 @@ Expected decision/interaction checkpoints include:
 
 These checkpoints must state exactly what the user needs to decide or run, with copy-pastable commands when local action is required. Secrets must not be requested in chat.
 
-## 17. Open decisions after design approval
+## 18. Open decisions after design approval
 
 The following are intentionally deferred to the implementation plan or Phase 0 rather than guessed:
 
@@ -423,11 +460,11 @@ The following are intentionally deferred to the implementation plan or Phase 0 r
 - exact command variants for Linux/macOS observers;
 - final timeout/output cap constants;
 - final secret-pattern list;
-- whether `process_status` and container IDs use explicit per-resource registries or a narrower safe discovery policy;
+- whether `process_status` uses explicit per-resource registries or another equally narrow safe policy;
 - availability and charging behavior of Secure MCP Tunnel for the user's actual account;
 - final production gateway selection and its SSH reachability.
 
-## 18. Acceptance criteria for Issue #1
+## 19. Acceptance criteria for Issue #1
 
 Issue #1 is satisfied when this document is reviewed and agreed to as the design baseline, and when it clearly defines:
 
@@ -435,11 +472,12 @@ Issue #1 is satisfied when this document is reviewed and agreed to as the design
 - gateway-independent architecture;
 - semantic read-only tool surface;
 - host/resource allowlisting;
-- command/transport boundaries;
+- command/transport boundaries including SSH remote-shell handling;
 - sensitive-data controls;
 - timeout/output/error behavior;
+- metadata-only audit behavior;
 - test strategy;
 - phased deployment and implementation;
-- explicitly deferred user decisions.
+- explicitly deferred user decisions and the no-extra-cost gate.
 
 Implementation does not begin until the written design has been reviewed by the user.
