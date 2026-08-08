@@ -2,10 +2,10 @@ from collections import deque
 from pathlib import Path
 
 import pytest
-from remote_observer_mcp.observers.workspace import workspace_find, workspace_search
 
 from remote_observer_mcp.config import WorkspaceConfig, load_config
 from remote_observer_mcp.models import CommandResult, CommandSpec
+from remote_observer_mcp.observers.workspace import workspace_find, workspace_search
 from remote_observer_mcp.server import create_server
 
 
