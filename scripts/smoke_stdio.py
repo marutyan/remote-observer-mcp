@@ -9,7 +9,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-_EXPECTED_TOOLS = {
+_REQUIRED_TOOLS = {
     "list_hosts",
     "host_overview",
     "system_status",
@@ -43,14 +43,19 @@ transport = "local"
             await session.initialize()
             listed = await session.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
-            if set(tools) != _EXPECTED_TOOLS:
-                raise RuntimeError(f"unexpected MCP tools: {sorted(tools)}")
+            if not _REQUIRED_TOOLS.issubset(tools):
+                missing = sorted(_REQUIRED_TOOLS - set(tools))
+                raise RuntimeError(f"missing required MCP tools: {missing}")
             for tool in tools.values():
                 annotations = tool.annotations
                 if annotations is None or not annotations.readOnlyHint:
                     raise RuntimeError(f"tool is not read-only: {tool.name}")
                 if annotations.destructiveHint is not False:
                     raise RuntimeError(f"tool may be destructive: {tool.name}")
+                if annotations.idempotentHint is not True:
+                    raise RuntimeError(f"tool is not idempotent: {tool.name}")
+                if annotations.openWorldHint is not False:
+                    raise RuntimeError(f"tool is open-world: {tool.name}")
 
             result = await session.call_tool("list_hosts", arguments={})
             if result.isError:
