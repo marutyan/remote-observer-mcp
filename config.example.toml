@@ -1,8 +1,8 @@
 # Copy to ~/.config/remote-observer-mcp/config.toml for local development.
 # The gateway runbook uses /etc/remote-observer-mcp/config.toml instead.
 # Do not put passwords, private keys, API tokens, or other secret values here.
-# Host/resource table names are logical IDs exposed to ChatGPT; concrete paths and
-# SSH aliases stay in this gateway-local file.
+# Host/resource/workspace table names are logical IDs exposed to ChatGPT; concrete
+# paths and SSH aliases stay in this gateway-local file.
 
 [hosts.gateway]
 transport = "local"
@@ -30,3 +30,11 @@ logs = false
 # process_status uses an exact registered process name and never returns cmdline/env.
 [hosts.remote.processes.example]
 name = "example-process"
+
+# Generic workspace tools resolve this logical ID to a registered host and root.
+# Content access also applies built-in sensitive-path filters plus these patterns.
+[workspaces.example]
+host = "remote"
+root = "/srv/example"
+secret_patterns = ["private/**"]
+compose = false
