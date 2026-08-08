@@ -1,8 +1,8 @@
 from collections import deque
 
 import pytest
-from remote_observer_mcp.backends import BackendChoice, resolve_backend
 
+from remote_observer_mcp.backends import BackendChoice, resolve_backend
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandResult, CommandSpec
 
