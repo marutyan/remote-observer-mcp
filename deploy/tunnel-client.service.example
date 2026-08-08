@@ -1,0 +1,40 @@
+[Unit]
+Description=OpenAI Secure MCP Tunnel for remote-observer-mcp
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=remote-observer
+Group=remote-observer
+Environment=HOME=/var/lib/remote-observer-mcp
+Environment=REMOTE_OBSERVER_CONFIG=/etc/remote-observer-mcp/config.toml
+ExecStart=/usr/local/bin/tunnel-client run --profile remote-observer --control-plane.api-key=file:/etc/remote-observer-mcp/runtime-api-key --health.listen-addr=127.0.0.1:18080 --health.url-file=/run/remote-observer-mcp/health.url --log.level=info --log.format=json
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+UMask=0077
+
+RuntimeDirectory=remote-observer-mcp
+RuntimeDirectoryMode=0700
+StateDirectory=remote-observer-mcp
+StateDirectoryMode=0700
+ConfigurationDirectory=remote-observer-mcp
+ConfigurationDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
