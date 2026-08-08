@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 
 import pytest
-
 from remote_observer_mcp.audit import run_observed_tool
+
 from remote_observer_mcp.config import load_config
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.server import create_server
