@@ -1,11 +1,11 @@
 import sys
 
 import pytest
-
-from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandResult, CommandSpec
 from remote_observer_mcp.transports.local import LocalTransport
 from remote_observer_mcp.transports.ssh import SshTransport
+
+from remote_observer_mcp.errors import ObserverError
 
 
 @pytest.mark.asyncio
