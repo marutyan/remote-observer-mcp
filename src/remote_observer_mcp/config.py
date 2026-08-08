@@ -13,6 +13,7 @@ from remote_observer_mcp.errors import ObserverError
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _RESOURCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,127}$")
 _SAFE_PATH_RE = re.compile(r"^/[A-Za-z0-9._/@:+,-]+$")
+_SECRET_PATTERN_RE = re.compile(r"^[A-Za-z0-9._/@+,*?-]{1,128}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +148,8 @@ def _parse_repos(raw: Any, host_id: str) -> Mapping[str, RepoConfig]:
         patterns = section.get("secret_patterns", [])
         if not isinstance(patterns, list) or not all(isinstance(item, str) for item in patterns):
             _invalid(f"repository {resource_id}: secret_patterns must be an array of strings")
+        if not all(_SECRET_PATTERN_RE.fullmatch(item) for item in patterns):
+            _invalid(f"repository {resource_id}: secret_patterns contain unsupported characters")
         result[resource_id] = RepoConfig(path=path, secret_patterns=tuple(patterns))
     return MappingProxyType(result)
 
