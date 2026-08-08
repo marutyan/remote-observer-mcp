@@ -30,6 +30,12 @@ _FORBIDDEN_FIELDS = {
     "script",
     "url",
     "method",
+    "tmux_user",
+    "user",
+    "sudo",
+    "socket",
+    "helper",
+    "helper_path",
 }
 
 
@@ -70,6 +76,22 @@ async def test_every_integrated_mcp_tool_keeps_closed_read_only_annotations(tmp_
         assert tool.annotations.openWorldHint is False
         fields = set(tool.inputSchema.get("properties", {}))
         assert fields.isdisjoint(_FORBIDDEN_FIELDS), (tool.name, fields & _FORBIDDEN_FIELDS)
+
+
+@pytest.mark.asyncio
+async def test_cross_user_tmux_config_does_not_change_mcp_schema(tmp_path: Path):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        '[hosts.emma]\ntransport = "local"\ntmux_user = "emma"\n',
+        encoding="utf-8",
+    )
+    tools = {tool.name: tool for tool in await create_server(load_config(config_path)).list_tools()}
+
+    for name in ("tmux_sessions", "tmux_windows", "tmux_panes", "tmux_capture"):
+        fields = set(tools[name].inputSchema.get("properties", {}))
+        assert fields.isdisjoint(
+            {"tmux_user", "user", "sudo", "socket", "command", "helper", "helper_path"}
+        )
 
 
 @pytest.mark.asyncio
@@ -133,3 +155,32 @@ def test_completion_docs_cover_generic_tools_and_external_approval():
     assert "required reviewer" in actions.lower()
     assert "self-hosted" in actions
     assert "追加費用" in actions
+
+
+def test_cross_user_tmux_deployment_documents_narrow_sudo_boundary():
+    sudoers_path = _ROOT / "deploy" / "remote-observer-tmux-read.sudoers.example"
+    assert sudoers_path.exists(), "narrow tmux sudoers example is missing"
+
+    sudoers = sudoers_path.read_text(encoding="utf-8")
+    deploy = (_ROOT / "deploy" / "README.md").read_text(encoding="utf-8")
+    actions = (_ROOT / "USER_ACTIONS.md").read_text(encoding="utf-8")
+
+    assert (
+        "remote-observer ALL=(emma) NOPASSWD: "
+        "/usr/local/libexec/remote-observer-tmux-read *"
+    ) in sudoers
+    assert "/usr/bin/tmux" not in sudoers
+    assert "/bin/sh" not in sudoers
+    assert "/bin/bash" not in sudoers
+
+    for marker in (
+        "/usr/local/libexec/remote-observer-tmux-read",
+        "root:root",
+        "visudo -cf",
+        'tmux_user = "emma"',
+        "sudo -n -u emma",
+    ):
+        assert marker in deploy or marker in actions
+
+    assert "direct /usr/bin/tmux" in deploy or "direct `/usr/bin/tmux`" in deploy
+    assert "general sudo -u emma" in deploy or "general `sudo -u emma`" in deploy

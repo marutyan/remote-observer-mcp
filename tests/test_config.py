@@ -126,3 +126,47 @@ def test_config_rejects_values_that_could_become_remote_syntax(
     with pytest.raises(ObserverError) as error:
         load_config(path)
     assert error.value.code == "invalid_configuration"
+
+def test_local_host_accepts_tmux_user(tmp_path: Path):
+    path = _write_config(
+        tmp_path / "config.toml",
+        """
+[hosts.emma]
+transport = "local"
+tmux_user = "emma"
+""",
+    )
+
+    config = load_config(path)
+    assert config.host("emma").tmux_user == "emma"
+
+
+def test_ssh_host_rejects_tmux_user(tmp_path: Path):
+    path = _write_config(
+        tmp_path / "config.toml",
+        """
+[hosts.remote]
+transport = "ssh"
+ssh_alias = "remote"
+tmux_user = "emma"
+""",
+    )
+
+    with pytest.raises(ObserverError) as error:
+        load_config(path)
+    assert error.value.code == "invalid_configuration"
+
+
+def test_tmux_user_rejects_unsafe_identifier(tmp_path: Path):
+    path = _write_config(
+        tmp_path / "config.toml",
+        """
+[hosts.emma]
+transport = "local"
+tmux_user = "emma;id"
+""",
+    )
+
+    with pytest.raises(ObserverError) as error:
+        load_config(path)
+    assert error.value.code == "invalid_configuration"

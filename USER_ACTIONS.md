@@ -6,7 +6,7 @@
 
 ## 0. No-extra-cost gate
 
-目的: Secure MCP Tunnelを使うことで、現在のChatGPT Pro以外に許容していない**追加費用**が発生しないことを確認する。
+目的: Secure MCP Tunnelを使うことで、現在のChatGPT Plus料金以外に許容していない**追加費用**が発生しないことを確認する。
 
 1. OpenAIの現在のChatGPT/MCP/Tunnel UI・公式ドキュメント・課金表示を確認する。
 2. 実アカウントで必要なTunnel機能が利用可能であることを確認する。
@@ -78,6 +78,48 @@ root = "/srv/example"
 secret_patterns = ["private/**"]
 compose = false
 ```
+
+### 3a. local別ユーザーのtmuxを観測する場合だけhelper/sudoersを配置する
+
+MCP daemonは`remote-observer`のまま維持し、tmux socketそのものは共有しない。`emma`ユーザーのtmuxを観測するproduction例では、root管理configへ次を追加する。
+
+```toml
+[hosts.emma]
+transport = "local"
+tmux_user = "emma"
+```
+
+`tmux_user`はMCP tool inputには露出しない。helperをroot所有で配置し、`remote-observer`または`emma`から書き換えられない状態にする。
+
+```bash
+sudo install -d -o root -g root -m 0755 /usr/local/libexec
+sudo install -o root -g root -m 0755 \
+  deploy/remote-observer-tmux-read \
+  /usr/local/libexec/remote-observer-tmux-read
+sudo chown root:root /usr/local/libexec/remote-observer-tmux-read
+sudo chmod 0755 /usr/local/libexec/remote-observer-tmux-read
+```
+
+sudoersは対象ユーザーを固定したchecked-in exampleをまず検証してから配置する。
+
+```bash
+sudo visudo -cf deploy/remote-observer-tmux-read.sudoers.example
+sudo install -o root -g root -m 0440 \
+  deploy/remote-observer-tmux-read.sudoers.example \
+  /etc/sudoers.d/remote-observer-tmux-read
+sudo visudo -cf /etc/sudoers.d/remote-observer-tmux-read
+```
+
+**direct `/usr/bin/tmux`、`/bin/sh`、`/bin/bash`、general `sudo -u emma`をpasswordless sudoへ追加しない。** 許可対象はroot-owned helperだけで、helper自身も`sessions` / `windows` / `panes` / `capture`以外を拒否する。
+
+ChatGPTを介さず、まずOS側のexact privilege pathを確認する。
+
+```bash
+sudo -u remote-observer \
+  sudo -n -u emma -- /usr/local/libexec/remote-observer-tmux-read sessions
+```
+
+既に`tunnel-client.service`を稼働させているgatewayへ後からこの設定を追加した場合は、config/helper/sudoers確認後にserviceをrestartし、`/readyz`が戻ってからChatGPT受入へ進む。
 
 ## 4. SSH aliases と known_hosts を準備する
 
@@ -179,6 +221,7 @@ secret値を除き、以下だけ共有すればproduction acceptanceを続行�
 - ChatGPTから`list_hosts`: PASS / FAIL
 - ChatGPTから`list_workspaces`: PASS / FAIL
 - ChatGPTから任意のread-only observer 1件: PASS / FAIL
+- cross-user tmuxを有効化した場合、ChatGPTから`tmux_sessions(host="emma")`: PASS / FAIL
 
 ---
 
@@ -242,6 +285,7 @@ R4 shell受入は必須ではない。試す場合はcommitted requestのexact s
 - health/readiness: PASS / FAIL
 - ChatGPT `list_hosts`: PASS / FAIL
 - ChatGPT generic read tool: PASS / FAIL
+- cross-user tmux enabledなら ChatGPT `tmux_sessions(host="emma")`: PASS / FAIL
 
 ### Execution Bridge
 

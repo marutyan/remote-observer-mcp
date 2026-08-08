@@ -1,0 +1,4 @@
+# Example for the production gateway where the registered tmux owner is "emma".
+# Validate a host-specific copy with visudo -cf before installing it.
+# The helper must be root:root owned and not writable by remote-observer or emma.
+remote-observer ALL=(emma) NOPASSWD: /usr/local/libexec/remote-observer-tmux-read *
