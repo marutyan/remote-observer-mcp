@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import remote_observer_mcp.observers.tmux as tmux_observer
 from remote_observer_mcp.config import load_config
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandResult, CommandSpec
@@ -67,3 +68,131 @@ async def test_tmux_tools_register_read_only(tmp_path: Path):
         assert tools[name].annotations is not None
         assert tools[name].annotations.readOnlyHint is True
         assert "command" not in set(tools[name].inputSchema.get("properties", {}))
+
+
+@pytest.mark.asyncio
+async def test_cross_user_transport_maps_only_existing_tmux_read_commands(monkeypatch):
+    adapter_type = getattr(tmux_observer, "CrossUserTmuxTransport", None)
+    assert adapter_type is not None, "cross-user tmux adapter is not implemented"
+
+    observed: list[CommandSpec] = []
+
+    async def fake_run_process(
+        command: CommandSpec, *, missing_code: str = "unsupported_capability"
+    ) -> CommandResult:
+        assert missing_code == "unsupported_capability"
+        observed.append(command)
+        return _result()
+
+    monkeypatch.setattr(tmux_observer, "run_process", fake_run_process, raising=False)
+    transport = adapter_type("emma")
+    cases = [
+        (
+            CommandSpec(
+                argv=(
+                    "tmux",
+                    "list-sessions",
+                    "-F",
+                    "#{session_name}\t#{session_windows}\t#{session_attached}",
+                )
+            ),
+            ("sessions",),
+        ),
+        (
+            CommandSpec(
+                argv=(
+                    "tmux",
+                    "list-windows",
+                    "-t",
+                    "work",
+                    "-F",
+                    "#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}",
+                )
+            ),
+            ("windows", "work"),
+        ),
+        (
+            CommandSpec(
+                argv=(
+                    "tmux",
+                    "list-panes",
+                    "-t",
+                    "@12",
+                    "-F",
+                    "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_current_command}",
+                )
+            ),
+            ("panes", "@12"),
+        ),
+        (
+            CommandSpec(
+                argv=("tmux", "capture-pane", "-p", "-t", "%3", "-S", "-125"),
+                timeout_seconds=10,
+            ),
+            ("capture", "%3", "125"),
+        ),
+    ]
+
+    for command, helper_args in cases:
+        await transport.run(command)
+        assert observed[-1].argv == (
+            "sudo",
+            "-n",
+            "-u",
+            "emma",
+            "--",
+            "/usr/local/libexec/remote-observer-tmux-read",
+            *helper_args,
+        )
+        assert observed[-1].timeout_seconds == command.timeout_seconds
+        assert observed[-1].max_output_bytes == command.max_output_bytes
+
+
+@pytest.mark.asyncio
+async def test_cross_user_transport_rejects_mutation_before_sudo(monkeypatch):
+    adapter_type = getattr(tmux_observer, "CrossUserTmuxTransport", None)
+    assert adapter_type is not None, "cross-user tmux adapter is not implemented"
+
+    called = False
+
+    async def fake_run_process(
+        command: CommandSpec, *, missing_code: str = "unsupported_capability"
+    ) -> CommandResult:
+        nonlocal called
+        called = True
+        return _result()
+
+    monkeypatch.setattr(tmux_observer, "run_process", fake_run_process, raising=False)
+    transport = adapter_type("emma")
+
+    with pytest.raises(ObserverError) as error:
+        await transport.run(CommandSpec(argv=("tmux", "send-keys", "-t", "%1", "id")))
+
+    assert error.value.code == "invalid_tmux_command"
+    assert called is False
+
+
+def test_tmux_transport_selection_preserves_default_and_uses_registered_user(tmp_path: Path):
+    selector = getattr(tmux_observer, "transport_for_tmux_host", None)
+    assert selector is not None, "tmux transport selector is not implemented"
+
+    path = tmp_path / "config.toml"
+    path.write_text(
+        """
+[hosts.gateway]
+transport = "local"
+
+[hosts.emma]
+transport = "local"
+tmux_user = "emma"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(path)
+
+    direct = selector(config.host("gateway"))
+    cross_user = selector(config.host("emma"))
+
+    assert direct.__class__.__name__ == "LocalTransport"
+    assert cross_user.__class__.__name__ == "CrossUserTmuxTransport"
+    assert cross_user.user == "emma"
