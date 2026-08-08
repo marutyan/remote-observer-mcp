@@ -2,7 +2,7 @@
 
 このファイルは、deterministicな実装・テストだけでは完了できない実環境操作を一箇所に集約する。上から順に実施し、各gateを通過するまでは次へ進まない。
 
-**秘密情報をChatGPT、GitHub Issue/PR、shell historyへ貼らない。** Runtime API keyやSSH private keyの値はローカルのroot-only fileへ直接保存する。
+**秘密情報をChatGPT、GitHub Issue/PR、shell historyへ貼らない。** Runtime API keyはroot管理かつservice groupだけが読めるfileへ、SSH private keyはservice userだけが読めるgateway-local fileへ直接保存する。
 
 ## 0. No-extra-cost gate
 
@@ -29,9 +29,19 @@ OpenAIのTunnel管理画面・公式手順で対象Tunnelを作成し、そのTu
 以下はUbuntu系gatewayを想定した例。実行前に対象hostが正しいことを確認する。
 
 ```bash
-sudo useradd --system --create-home --home-dir /var/lib/remote-observer-mcp --shell /usr/sbin/nologin remote-observer || true
+if ! id remote-observer >/dev/null 2>&1; then
+  sudo useradd --system --create-home --home-dir /var/lib/remote-observer-mcp --shell /usr/sbin/nologin remote-observer
+fi
 sudo install -d -o root -g root -m 0755 /opt/remote-observer-mcp
 sudo install -d -o root -g remote-observer -m 0750 /etc/remote-observer-mcp
+```
+
+OpenAIのTunnels管理画面または公式`tunnel-client`配布手順から、gatewayに対応する`tunnel-client`を取得する。repositoryのunit例は`/usr/local/bin/tunnel-client`を前提にするため、実体とversionを先に確認する。
+
+```bash
+/usr/local/bin/tunnel-client --version
+/usr/local/bin/tunnel-client help quickstart
+/usr/local/bin/tunnel-client profiles samples show sample_mcp_stdio_local
 ```
 
 repositoryを`/opt/remote-observer-mcp`へ配置し、Python 3.12 virtual environmentへpackageをinstallする。実際のclone/update方法はgatewayの既存運用に合わせる。
@@ -57,7 +67,7 @@ sudoedit /etc/remote-observer-mcp/config.toml
 sudoedit /etc/remote-observer-mcp/runtime-api-key
 ```
 
-`runtime-api-key`にはStep 1のRestricted runtime keyだけを保存する。値をcommand-line argumentへ直接書かない。
+`runtime-api-key`にはStep 1のRestricted runtime keyだけを保存する。ownerはroot、groupは`remote-observer`、modeは`0640`を維持し、値をcommand-line argumentへ直接書かない。
 
 ## 4. SSH aliases と known_hosts を準備する
 
@@ -152,6 +162,7 @@ curl --fail --silent --show-error http://127.0.0.1:18080/readyz
 後で以下だけ共有すれば、こちらでproduction acceptanceを続行できる。secret値は不要。
 
 - Step 0: 追加費用なしを確認できたか: PASS / BLOCKED
+- `tunnel-client --version`: 実行結果
 - `tunnel-client doctor`: PASS / FAIL（secretを除いた出力）
 - approved SSH aliasごとのread-only smoke: PASS / FAIL
 - `systemctl status`: active / failed
