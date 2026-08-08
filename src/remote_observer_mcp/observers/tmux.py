@@ -33,7 +33,10 @@ _SUDO_PATH = "/usr/bin/sudo"
 
 def _no_server(result: CommandResult) -> bool:
     text = f"{result.stdout}\n{result.stderr}".lower()
-    return result.exit_code == 1 and ("no server running" in text or "no sessions" in text)
+    missing_socket = "error connecting to " in text and "(no such file or directory)" in text
+    return result.exit_code == 1 and (
+        "no server running" in text or "no sessions" in text or missing_socket
+    )
 
 
 def _check(result: CommandResult) -> None:
