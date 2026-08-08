@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from remote_observer_mcp.config import load_config
 from remote_observer_mcp.errors import ObserverError
 
