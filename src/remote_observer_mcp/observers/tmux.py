@@ -28,6 +28,7 @@ _SESSION_FORMAT = "#{session_name}\t#{session_windows}\t#{session_attached}"
 _WINDOW_FORMAT = "#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}"
 _PANE_FORMAT = "#{pane_id}\t#{pane_index}\t#{pane_active}\t#{pane_current_command}"
 _HELPER_PATH = "/usr/local/libexec/remote-observer-tmux-read"
+_SUDO_PATH = "/usr/bin/sudo"
 
 
 def _no_server(result: CommandResult) -> bool:
@@ -109,7 +110,7 @@ class CrossUserTmuxTransport:
         helper_args = _helper_args(command)
         helper_command = CommandSpec(
             argv=(
-                "sudo",
+                _SUDO_PATH,
                 "-n",
                 "-u",
                 self.user,
