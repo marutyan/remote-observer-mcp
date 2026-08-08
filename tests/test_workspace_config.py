@@ -1,10 +1,10 @@
 from pathlib import Path
 
 import pytest
-from remote_observer_mcp.workspace import ensure_visible_relative_path, normalize_relative_path
 
 from remote_observer_mcp.config import load_config
 from remote_observer_mcp.errors import ObserverError
+from remote_observer_mcp.workspace import ensure_visible_relative_path, normalize_relative_path
 
 
 def _write(path: Path, text: str) -> Path:
