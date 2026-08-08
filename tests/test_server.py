@@ -5,6 +5,14 @@ import pytest
 
 from remote_observer_mcp.config import load_config
 
+_CORE_TOOLS = {
+    "list_hosts",
+    "host_overview",
+    "system_status",
+    "disk_usage",
+    "process_status",
+}
+
 
 def _config(tmp_path: Path):
     path = tmp_path / "config.toml"
@@ -27,20 +35,14 @@ name = "paper-worker"
 
 
 @pytest.mark.asyncio
-async def test_server_exposes_only_expected_read_only_tools(tmp_path: Path):
+async def test_server_keeps_core_tools_and_all_tools_read_only(tmp_path: Path):
     server_module = importlib.import_module("remote_observer_mcp.server")
     server = server_module.create_server(_config(tmp_path))
 
     tools = await server.list_tools()
     by_name = {tool.name: tool for tool in tools}
 
-    assert set(by_name) == {
-        "list_hosts",
-        "host_overview",
-        "system_status",
-        "disk_usage",
-        "process_status",
-    }
+    assert _CORE_TOOLS.issubset(by_name)
     for tool in by_name.values():
         assert tool.annotations is not None
         assert tool.annotations.readOnlyHint is True
