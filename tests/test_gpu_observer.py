@@ -81,8 +81,8 @@ gpu = true
     assert tools["gpu_status"].annotations.readOnlyHint is True
     assert tools["gpu_status"].annotations.destructiveHint is False
 
-    result = await server.call_tool("gpu_status", {"host": "no_gpu"})
-    assert result.structuredContent == {
+    _, structured = await server.call_tool("gpu_status", {"host": "no_gpu"})
+    assert structured == {
         "ok": False,
         "error": {
             "code": "unsupported_capability",
