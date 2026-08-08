@@ -19,8 +19,6 @@ RuntimeDirectory=remote-observer-mcp
 RuntimeDirectoryMode=0700
 StateDirectory=remote-observer-mcp
 StateDirectoryMode=0700
-ConfigurationDirectory=remote-observer-mcp
-ConfigurationDirectoryMode=0750
 
 NoNewPrivileges=true
 PrivateTmp=true
