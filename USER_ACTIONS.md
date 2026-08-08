@@ -97,6 +97,10 @@ sudo -u remote-observer env HOME=/var/lib/remote-observer-mcp \
 
 Tunnel IDを一時的なshell variableへ入れ、service userのHOMEへprofileを生成する。
 
+上流CLI contractのcanonical形は `tunnel-client init --sample sample_mcp_stdio_local --profile remote-observer --tunnel-id "$CONTROL_PLANE_TUNNEL_ID" --mcp-command /opt/remote-observer-mcp/.venv/bin/remote-observer-mcp`。
+
+実際にはservice userとして実行する。
+
 ```bash
 sudo -u remote-observer env HOME=/var/lib/remote-observer-mcp CONTROL_PLANE_TUNNEL_ID="$CONTROL_PLANE_TUNNEL_ID" \
   /usr/local/bin/tunnel-client init \
