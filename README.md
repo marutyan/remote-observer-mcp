@@ -13,7 +13,7 @@ ChatGPT
   -> allowlisted hosts/resources
 ```
 
-The architecture/security baseline is in `docs/superpowers/specs/`. The implementation sequence is in `docs/superpowers/plans/`. Gateway deployment is documented in `deploy/README.md`, while all remaining credential/account/host operations are batched in `USER_ACTIONS.md`.
+The architecture/security baseline is in `docs/superpowers/specs/`. The implementation sequence is in `docs/superpowers/plans/`; the deployment topology correction that supersedes the original standalone-stdio service idea is recorded in `docs/superpowers/plans/2026-08-08-remote-observer-mcp-deployment-amendment.md`. Gateway deployment is documented in `deploy/README.md`, while all remaining credential/account/host operations are batched in `USER_ACTIONS.md`.
 
 ## Safety boundary
 
