@@ -2,9 +2,9 @@ import hashlib
 import json
 
 import pytest
-from remote_observer_mcp.execution.model import ExecutionRequest, request_digest
 
 from remote_observer_mcp.errors import ObserverError
+from remote_observer_mcp.execution.model import ExecutionRequest, request_digest
 
 
 def _bytes(payload: dict) -> bytes:
