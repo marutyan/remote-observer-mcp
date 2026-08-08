@@ -69,3 +69,42 @@ transport = "local"
     with pytest.raises(ObserverError) as resource_error:
         config.host("gateway").service("missing")
     assert resource_error.value.code == "unknown_resource"
+
+
+@pytest.mark.parametrize(
+    "config_text",
+    [
+        """
+[hosts.bad]
+transport = "ssh"
+ssh_alias = "bad;host"
+""",
+        """
+[hosts.bad]
+transport = "local"
+[hosts.bad.repos.repo]
+path = "relative/path"
+""",
+        """
+[hosts.bad]
+transport = "local"
+[hosts.bad.repos.repo]
+path = "/srv/repo"
+secret_patterns = ["'; touch /tmp/owned #"]
+""",
+        """
+[hosts.bad]
+transport = "local"
+[hosts.bad.services.app]
+unit = "app$(id).service"
+""",
+    ],
+)
+def test_config_rejects_values_that_could_become_remote_syntax(
+    tmp_path: Path, config_text: str
+):
+    path = _write_config(tmp_path / "unsafe.toml", config_text)
+
+    with pytest.raises(ObserverError) as error:
+        load_config(path)
+    assert error.value.code == "invalid_configuration"
