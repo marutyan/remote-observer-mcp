@@ -68,6 +68,8 @@ class AppConfig:
     hosts: Mapping[str, HostConfig]
 
     def host(self, host_id: str) -> HostConfig:
+        if not _ID_RE.fullmatch(host_id):
+            raise ObserverError("unknown_host", "unknown host")
         try:
             return self.hosts[host_id]
         except KeyError as error:
@@ -178,6 +180,8 @@ def _parse_processes(raw: Any, host_id: str) -> Mapping[str, ProcessConfig]:
 
 
 def _resource(mapping: Mapping[str, Any], resource_id: str, kind: str) -> Any:
+    if not _ID_RE.fullmatch(resource_id):
+        raise ObserverError("unknown_resource", f"unknown {kind}")
     try:
         return mapping[resource_id]
     except KeyError as error:
