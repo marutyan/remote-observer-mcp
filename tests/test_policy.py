@@ -1,5 +1,4 @@
 import pytest
-
 from remote_observer_mcp.models import CommandSpec
 from remote_observer_mcp.policy import HARD_OUTPUT_BYTES, sanitize_output
 
