@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 
 from remote_observer_mcp.config import AppConfig, HostConfig, load_config
 from remote_observer_mcp.errors import ObserverError
+from remote_observer_mcp.observers import register_extension_tools
 from remote_observer_mcp.observers.system import (
     disk_usage as observe_disk_usage,
 )
@@ -85,6 +86,7 @@ def create_server(config: AppConfig) -> FastMCP:
         except ObserverError as error:
             return _failure(error)
 
+    register_extension_tools(server, config)
     return server
 
 
