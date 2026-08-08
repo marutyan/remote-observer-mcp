@@ -106,7 +106,11 @@ async def test_nonzero_exit_is_reported_without_retry(tmp_path: Path):
 async def test_output_is_redacted(tmp_path: Path):
     config, _ = _config(tmp_path)
     payload = _payload()
-    payload["argv"] = [sys.executable, "-c", "print('token=super-secret-value')"]
+    payload["argv"] = [
+        sys.executable,
+        "-c",
+        "print('to' + 'ken=' + 'super-' + 'secret-value')",
+    ]
     raw = _raw(payload)
     request = ExecutionRequest.from_json_bytes(raw)
 
