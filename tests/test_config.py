@@ -71,6 +71,24 @@ transport = "local"
     assert resource_error.value.code == "unknown_resource"
 
 
+def test_registry_does_not_echo_unsafe_lookup_identifiers(tmp_path: Path):
+    path = _write_config(
+        tmp_path / "config.toml",
+        """
+[hosts.gateway]
+transport = "local"
+""",
+    )
+    config = load_config(path)
+
+    with pytest.raises(ObserverError) as error:
+        config.host("bad\nidentifier")
+
+    assert error.value.code == "unknown_host"
+    assert "\n" not in error.value.message
+    assert "bad" not in error.value.message
+
+
 @pytest.mark.parametrize(
     "config_text",
     [
