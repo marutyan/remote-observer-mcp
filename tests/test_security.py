@@ -62,6 +62,25 @@ async def test_audit_does_not_echo_invalid_logical_ids(capsys):
 
 
 @pytest.mark.asyncio
+async def test_unexpected_error_is_audited_without_being_swallowed(capsys):
+    async def operation():
+        raise RuntimeError("sensitive internal details")
+
+    with pytest.raises(RuntimeError, match="sensitive internal details"):
+        await run_observed_tool(
+            tool="repo_diff",
+            host_id="emma",
+            resource_id="paperapp",
+            operation=operation,
+        )
+
+    event = json.loads(capsys.readouterr().err.strip())
+    assert event["outcome"] == "internal_error"
+    assert event["tool"] == "repo_diff"
+    assert "sensitive internal details" not in json.dumps(event)
+
+
+@pytest.mark.asyncio
 async def test_every_mcp_tool_is_closed_read_only_and_has_no_arbitrary_target(tmp_path: Path):
     path = tmp_path / "config.toml"
     path.write_text(
