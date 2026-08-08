@@ -23,3 +23,5 @@ jobs:
         run: python -m ruff check .
       - name: Test
         run: python -m pytest -q
+      - name: MCP stdio smoke
+        run: python scripts/smoke_stdio.py

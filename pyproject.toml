@@ -17,6 +17,9 @@ dev = [
   "ruff>=0.12,<1",
 ]
 
+[project.scripts]
+remote-observer-mcp = "remote_observer_mcp.server:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
