@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "request_id": "exec-20260808-0001",
+  "target": {
+    "host": "gateway"
+  },
+  "mode": "argv",
+  "argv": [
+    "python3",
+    "--version"
+  ],
+  "timeout_seconds": 30,
+  "risk": "R1",
+  "reason": "Benign example used to document the externally approved execution flow"
+}

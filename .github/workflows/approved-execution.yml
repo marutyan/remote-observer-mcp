@@ -1,0 +1,52 @@
+name: Approved remote execution
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Committed execution request ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-execution-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install validator
+        run: python -m pip install -e .
+      - name: Validate request without executing it
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+        run: python scripts/validate_execution_request.py
+
+  execute:
+    needs: preflight
+    environment: remote-execution
+    runs-on: [self-hosted, remote-observer]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install exact checked-out executor
+        run: python3 -m pip install -e .
+      - name: Execute approved immutable request
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          REMOTE_OBSERVER_CONFIG: /etc/remote-observer-mcp/config.toml
+          REMOTE_OBSERVER_REQUESTS: execution_requests
+        run: remote-observer-exec "$REQUEST_ID"
