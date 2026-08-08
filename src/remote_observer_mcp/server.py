@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -20,8 +20,6 @@ from remote_observer_mcp.observers.system import (
     system_status as observe_system_status,
 )
 from remote_observer_mcp.transports import transport_for_host
-
-T = TypeVar("T")
 
 _READ_ONLY = ToolAnnotations(
     readOnlyHint=True,
@@ -93,7 +91,7 @@ def create_server(config: AppConfig) -> FastMCP:
 async def _host_call(
     config: AppConfig,
     host_id: str,
-    observer: Callable[[Any], Awaitable[T]],
+    observer: Callable[[Any], Awaitable[Any]],
 ) -> dict[str, Any]:
     try:
         host_config = config.host(host_id)
