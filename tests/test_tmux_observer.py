@@ -196,3 +196,32 @@ tmux_user = "emma"
     assert direct.__class__.__name__ == "LocalTransport"
     assert cross_user.__class__.__name__ == "CrossUserTmuxTransport"
     assert cross_user.user == "emma"
+
+
+@pytest.mark.asyncio
+async def test_tmux_sessions_treats_missing_default_socket_as_empty():
+    transport = FakeTransport(
+        [
+            _result(
+                stderr=(
+                    "error connecting to /tmp/tmux-1000/default "
+                    "(No such file or directory)\n"
+                ),
+                exit_code=1,
+            )
+        ]
+    )
+
+    assert await tmux_sessions(transport) == []
+
+
+@pytest.mark.asyncio
+async def test_tmux_sessions_does_not_hide_permission_denied():
+    transport = FakeTransport(
+        [_result(stderr="error connecting to /tmp/tmux-1000/default (Permission denied)\n", exit_code=1)]
+    )
+
+    with pytest.raises(ObserverError) as error:
+        await tmux_sessions(transport)
+
+    assert error.value.code == "command_failed"
