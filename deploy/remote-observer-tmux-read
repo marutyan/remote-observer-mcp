@@ -1,0 +1,4 @@
+#!/opt/remote-observer-mcp/.venv/bin/python
+from remote_observer_mcp.tmux_helper import main
+
+raise SystemExit(main())
