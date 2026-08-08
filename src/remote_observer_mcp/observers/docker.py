@@ -6,6 +6,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from remote_observer_mcp.audit import run_observed_tool
 from remote_observer_mcp.config import AppConfig, ContainerConfig
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandResult, CommandSpec
@@ -87,12 +88,18 @@ async def container_logs(
 def register_tools(server: FastMCP, config: AppConfig) -> None:
     @server.tool(name="container_list", annotations=_READ_ONLY, structured_output=True)
     async def container_list_tool(host: str) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
-            data = await container_list(transport_for_host(host_config), host_config.containers)
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await container_list(
+                transport_for_host(host_config), host_config.containers
+            )
+
+        return await run_observed_tool(
+            tool="container_list",
+            host_id=host,
+            resource_id=None,
+            operation=operation,
+        )
 
     @server.tool(name="container_logs", annotations=_READ_ONLY, structured_output=True)
     async def container_logs_tool(
@@ -100,15 +107,19 @@ def register_tools(server: FastMCP, config: AppConfig) -> None:
         container: str,
         lines: int = 100,
     ) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             container_config = host_config.container(container)
-            data = await container_logs(
+            return await container_logs(
                 transport_for_host(host_config), container_config, lines
             )
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+
+        return await run_observed_tool(
+            tool="container_logs",
+            host_id=host,
+            resource_id=container,
+            operation=operation,
+        )
 
 
 def _check_docker_result(result: CommandResult) -> None:
@@ -120,11 +131,3 @@ def _check_docker_result(result: CommandResult) -> None:
     if "permission denied" in diagnostic:
         raise ObserverError("permission_denied", "Docker access is denied")
     raise ObserverError("command_failed", "Docker observation failed")
-
-
-def _success(data: Any) -> dict[str, Any]:
-    return {"ok": True, "data": data}
-
-
-def _failure(error: ObserverError) -> dict[str, Any]:
-    return {"ok": False, "error": {"code": error.code, "message": error.message}}

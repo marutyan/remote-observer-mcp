@@ -6,6 +6,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from remote_observer_mcp.audit import run_observed_tool
 from remote_observer_mcp.config import AppConfig, RepoConfig
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandResult, CommandSpec
@@ -126,33 +127,45 @@ async def repo_log(
 def register_tools(server: FastMCP, config: AppConfig) -> None:
     @server.tool(name="repo_status", annotations=_READ_ONLY, structured_output=True)
     async def repo_status_tool(host: str, repo: str) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             repo_config = host_config.repo(repo)
-            data = await repo_status(transport_for_host(host_config), repo_config)
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await repo_status(transport_for_host(host_config), repo_config)
+
+        return await run_observed_tool(
+            tool="repo_status",
+            host_id=host,
+            resource_id=repo,
+            operation=operation,
+        )
 
     @server.tool(name="repo_diff", annotations=_READ_ONLY, structured_output=True)
     async def repo_diff_tool(host: str, repo: str) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             repo_config = host_config.repo(repo)
-            data = await repo_diff(transport_for_host(host_config), repo_config)
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await repo_diff(transport_for_host(host_config), repo_config)
+
+        return await run_observed_tool(
+            tool="repo_diff",
+            host_id=host,
+            resource_id=repo,
+            operation=operation,
+        )
 
     @server.tool(name="repo_log", annotations=_READ_ONLY, structured_output=True)
     async def repo_log_tool(host: str, repo: str, count: int = 20) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             repo_config = host_config.repo(repo)
-            data = await repo_log(transport_for_host(host_config), repo_config, count)
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await repo_log(transport_for_host(host_config), repo_config, count)
+
+        return await run_observed_tool(
+            tool="repo_log",
+            host_id=host,
+            resource_id=repo,
+            operation=operation,
+        )
 
 
 def _secret_patterns(repo: RepoConfig) -> tuple[str, ...]:
@@ -176,11 +189,3 @@ def _check_git_result(result: CommandResult) -> None:
     if "permission denied" in result.stderr.lower():
         raise ObserverError("permission_denied", "Git repository access is denied")
     raise ObserverError("command_failed", "Git observation failed")
-
-
-def _success(data: Any) -> dict[str, Any]:
-    return {"ok": True, "data": data}
-
-
-def _failure(error: ObserverError) -> dict[str, Any]:
-    return {"ok": False, "error": {"code": error.code, "message": error.message}}

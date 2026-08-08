@@ -5,6 +5,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from remote_observer_mcp.audit import run_observed_tool
 from remote_observer_mcp.config import AppConfig, ServiceConfig
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandSpec
@@ -85,28 +86,28 @@ async def service_logs(
 def register_tools(server: FastMCP, config: AppConfig) -> None:
     @server.tool(name="service_status", annotations=_READ_ONLY, structured_output=True)
     async def service_status_tool(host: str, service: str) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             service_config = host_config.service(service)
-            data = await service_status(transport_for_host(host_config), service_config)
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await service_status(transport_for_host(host_config), service_config)
+
+        return await run_observed_tool(
+            tool="service_status",
+            host_id=host,
+            resource_id=service,
+            operation=operation,
+        )
 
     @server.tool(name="service_logs", annotations=_READ_ONLY, structured_output=True)
     async def service_logs_tool(host: str, service: str, lines: int = 100) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             service_config = host_config.service(service)
-            data = await service_logs(transport_for_host(host_config), service_config, lines)
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await service_logs(transport_for_host(host_config), service_config, lines)
 
-
-def _success(data: Any) -> dict[str, Any]:
-    return {"ok": True, "data": data}
-
-
-def _failure(error: ObserverError) -> dict[str, Any]:
-    return {"ok": False, "error": {"code": error.code, "message": error.message}}
+        return await run_observed_tool(
+            tool="service_logs",
+            host_id=host,
+            resource_id=service,
+            operation=operation,
+        )

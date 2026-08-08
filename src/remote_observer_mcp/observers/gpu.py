@@ -7,6 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from remote_observer_mcp.audit import run_observed_tool
 from remote_observer_mcp.config import AppConfig
 from remote_observer_mcp.errors import ObserverError
 from remote_observer_mcp.models import CommandResult, CommandSpec
@@ -60,17 +61,21 @@ async def gpu_status(transport: Transport) -> list[dict[str, Any]]:
 def register_tools(server: FastMCP, config: AppConfig) -> None:
     @server.tool(name="gpu_status", annotations=_READ_ONLY, structured_output=True)
     async def gpu_status_tool(host: str) -> dict[str, Any]:
-        try:
+        async def operation() -> Any:
             host_config = config.host(host)
             if not host_config.gpu:
                 raise ObserverError(
                     "unsupported_capability",
                     "GPU observation is not enabled for this host",
                 )
-            data = await gpu_status(transport_for_host(host_config))
-            return _success(data)
-        except ObserverError as error:
-            return _failure(error)
+            return await gpu_status(transport_for_host(host_config))
+
+        return await run_observed_tool(
+            tool="gpu_status",
+            host_id=host,
+            resource_id=None,
+            operation=operation,
+        )
 
 
 def _check_gpu_result(result: CommandResult) -> None:
@@ -82,11 +87,3 @@ def _check_gpu_result(result: CommandResult) -> None:
     if "permission denied" in diagnostic:
         raise ObserverError("permission_denied", "GPU observation is denied")
     raise ObserverError("command_failed", "GPU observation failed")
-
-
-def _success(data: Any) -> dict[str, Any]:
-    return {"ok": True, "data": data}
-
-
-def _failure(error: ObserverError) -> dict[str, Any]:
-    return {"ok": False, "error": {"code": error.code, "message": error.message}}
