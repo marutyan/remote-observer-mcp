@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from remote_observer_mcp.execution.executor import execute_request
 
 from remote_observer_mcp.config import load_config
 from remote_observer_mcp.errors import ObserverError
+from remote_observer_mcp.execution.executor import execute_request
 from remote_observer_mcp.execution.model import ExecutionRequest
 from remote_observer_mcp.server import create_server
 
