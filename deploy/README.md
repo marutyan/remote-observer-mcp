@@ -133,11 +133,58 @@ Copy `deploy/tunnel-client.service.example` to `/etc/systemd/system/tunnel-clien
 
 The service exposes a local health endpoint on `127.0.0.1:18080` and writes the resolved health URL under `/run/remote-observer-mcp/health.url`. Use the tunnel client's documented `/healthz`, `/readyz`, and `/stats` endpoints for local diagnostics.
 
+## Cross-user tmux read-only observation
+
+The MCP daemon remains the dedicated `remote-observer` OS user. Do not share another user's tmux socket with that account: access to the tmux client socket is a control capability and would allow mutation outside the MCP API.
+
+For one fixed local tmux owner, opt in through root-managed config only. The production `emma` example is:
+
+```toml
+[hosts.emma]
+transport = "local"
+tmux_user = "emma"
+```
+
+`tmux_user` is not an MCP argument. It is accepted only on a local logical host. When set, the four existing tmux observers route their already validated read operations through `/usr/local/libexec/remote-observer-tmux-read` using `sudo -n -u emma`. The helper accepts only sessions/windows/panes/capture and internally executes fixed `/usr/bin/tmux` read commands with a sanitized environment.
+
+Install the helper as **root:root** and keep it non-writable by both `remote-observer` and the target interactive user:
+
+```bash
+sudo install -d -o root -g root -m 0755 /usr/local/libexec
+sudo install -o root -g root -m 0755 \
+  deploy/remote-observer-tmux-read \
+  /usr/local/libexec/remote-observer-tmux-read
+sudo chown root:root /usr/local/libexec/remote-observer-tmux-read
+sudo chmod 0755 /usr/local/libexec/remote-observer-tmux-read
+```
+
+The checked-in sudoers example is intentionally target-user-specific. Validate it before installation:
+
+```bash
+sudo visudo -cf deploy/remote-observer-tmux-read.sudoers.example
+sudo install -o root -g root -m 0440 \
+  deploy/remote-observer-tmux-read.sudoers.example \
+  /etc/sudoers.d/remote-observer-tmux-read
+sudo visudo -cf /etc/sudoers.d/remote-observer-tmux-read
+```
+
+Then verify the exact privileged path without involving ChatGPT:
+
+```bash
+sudo -u remote-observer \
+  sudo -n -u emma -- /usr/local/libexec/remote-observer-tmux-read sessions
+```
+
+Do **not** grant direct `/usr/bin/tmux` execution through sudoers, a shell such as `/bin/sh` or `/bin/bash`, or general `sudo -u emma`. The wildcard in the example sudoers rule reaches only the root-owned helper; the helper performs its own closed allowlist validation and has no mutation operation.
+
+After config/helper/sudoers changes, restart `tunnel-client.service` and confirm `/readyz` before a real ChatGPT `tmux_sessions(host="emma")` call. Production cross-user tmux access is not PASS until that real call succeeds.
+
 ## Failure policy
 
 - Tunnel/account/cost uncertainty: stop before network traffic.
 - SSH unknown host key: fail; do not auto-accept a new key.
 - SSH authentication failure: fail; do not fall back to password prompting.
 - Missing Docker/Git/GPU/systemd permissions: report unsupported/permission failure; do not install or elevate automatically.
+- Cross-user tmux helper missing/sudo denied: fail generically; do not fall back to socket sharing or broader sudo.
 - MCP child crash: `tunnel-client` owns the runtime child lifecycle; systemd restarts the tunnel supervisor on failure.
 - Real-host tests remain `NOT RUN` until their exact command/environment/result is observed.
