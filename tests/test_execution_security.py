@@ -1,9 +1,9 @@
 import json
 
 import pytest
-from remote_observer_mcp.execution.model import ExecutionRequest
 
 from remote_observer_mcp.errors import ObserverError
+from remote_observer_mcp.execution.model import ExecutionRequest
 
 
 def _request_with(argv=None, script=None, reason="Routine task"):
