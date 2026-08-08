@@ -37,30 +37,65 @@ async def run_observed_tool(
     """Run a semantic tool operation and emit only sanitized metadata to stderr."""
     started = time.monotonic()
     data: Any = None
-    outcome = "success"
     try:
         maybe_awaitable = operation()
         data = await maybe_awaitable if inspect.isawaitable(maybe_awaitable) else maybe_awaitable
-        result = {"ok": True, "data": data}
     except ObserverError as error:
-        outcome = error.code
-        result = {
+        _emit_for_call(
+            started=started,
+            tool=tool,
+            host_id=host_id,
+            resource_id=resource_id,
+            outcome=error.code,
+            data=None,
+        )
+        return {
             "ok": False,
             "error": {"code": error.code, "message": error.message},
         }
+    except Exception:
+        _emit_for_call(
+            started=started,
+            tool=tool,
+            host_id=host_id,
+            resource_id=resource_id,
+            outcome="internal_error",
+            data=None,
+        )
+        raise
 
-    event = AuditEvent(
-        timestamp=datetime.now(UTC).isoformat(),
-        tool=_safe_tool_name(tool),
-        host_id=_safe_logical_id(host_id),
-        resource_id=_safe_logical_id(resource_id),
-        duration_ms=max(0, int((time.monotonic() - started) * 1000)),
-        outcome=outcome,
-        truncated=_contains_true_flag(data, "truncated"),
-        redacted=_contains_true_flag(data, "redacted"),
+    _emit_for_call(
+        started=started,
+        tool=tool,
+        host_id=host_id,
+        resource_id=resource_id,
+        outcome="success",
+        data=data,
     )
-    _emit(event)
-    return result
+    return {"ok": True, "data": data}
+
+
+def _emit_for_call(
+    *,
+    started: float,
+    tool: str,
+    host_id: str | None,
+    resource_id: str | None,
+    outcome: str,
+    data: Any,
+) -> None:
+    _emit(
+        AuditEvent(
+            timestamp=datetime.now(UTC).isoformat(),
+            tool=_safe_tool_name(tool),
+            host_id=_safe_logical_id(host_id),
+            resource_id=_safe_logical_id(resource_id),
+            duration_ms=max(0, int((time.monotonic() - started) * 1000)),
+            outcome=outcome,
+            truncated=_contains_true_flag(data, "truncated"),
+            redacted=_contains_true_flag(data, "redacted"),
+        )
+    )
 
 
 def _contains_true_flag(value: Any, flag: str) -> bool:
