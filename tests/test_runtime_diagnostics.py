@@ -2,11 +2,11 @@ from collections import deque
 from pathlib import Path
 
 import pytest
-from remote_observer_mcp.observers.container_ext import container_stats
-from remote_observer_mcp.observers.service_ext import journal_query
 
 from remote_observer_mcp.config import ContainerConfig, ServiceConfig, load_config
 from remote_observer_mcp.models import CommandResult, CommandSpec
+from remote_observer_mcp.observers.container_ext import container_stats
+from remote_observer_mcp.observers.service_ext import journal_query
 from remote_observer_mcp.server import create_server
 
 
