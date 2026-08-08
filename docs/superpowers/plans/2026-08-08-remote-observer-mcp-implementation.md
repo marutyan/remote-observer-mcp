@@ -56,6 +56,7 @@ remote-observer-mcp/
 │       └── gpu.py
 ├── tests/
 │   ├── conftest.py
+│   ├── test_package.py
 │   ├── test_config.py
 │   ├── test_policy.py
 │   ├── test_transports.py
@@ -86,12 +87,12 @@ remote-observer-mcp/
 - Create: `pyproject.toml`
 - Create: `.github/workflows/ci.yml`
 - Create: `src/remote_observer_mcp/__init__.py`
-- Create: `src/remote_observer_mcp/__main__.py`
+- Create: `tests/test_package.py`
 - Create: `tests/conftest.py`
 - Modify: `README.md`
 
 **Interfaces:**
-- Produces console entry point `remote-observer-mcp = remote_observer_mcp.server:main`.
+- Produces an importable `remote_observer_mcp` package with version `0.1.0`.
 - Development commands: `python -m pytest -q` and `python -m ruff check .`.
 
 - [ ] **Step 1: Add the first failing package import test**
@@ -126,9 +127,6 @@ dev = [
   "pytest-asyncio>=0.25,<1",
   "ruff>=0.12,<1",
 ]
-
-[project.scripts]
-remote-observer-mcp = "remote_observer_mcp.server:main"
 ```
 
 `src/remote_observer_mcp/__init__.py`:
@@ -284,7 +282,7 @@ and unsafe configured values are rejected before process creation.
 
 - [ ] **Step 6: Implement SSH transport**
 
-The remote command string is assembled only from observer-provided fixed tokens plus registry values validated by Task 2. Model-provided free-form command text is not an interface.
+The remote command string is assembled from observer-provided argv tokens using `shlex.join`. Tokens are fixed implementation values or registry values validated by Task 2. Model-provided free-form command text is not an interface. Tests assert that quotes, `$()`, semicolons, control characters, and unsupported whitespace cannot enter through configuration.
 
 - [ ] **Step 7: Run complete shared-contract suite**
 
@@ -318,7 +316,8 @@ Commit logical units separately:
 - Create: `tests/test_server.py`
 - Create: `tests/test_system_observer.py`
 - Create: `scripts/smoke_stdio.py`
-- Modify: `src/remote_observer_mcp/__main__.py`
+- Create: `src/remote_observer_mcp/__main__.py`
+- Modify: `pyproject.toml`
 
 **Interfaces:**
 - `create_server(config: AppConfig) -> FastMCP`
@@ -346,7 +345,7 @@ Assert each tool advertises `readOnlyHint=True`.
 
 - [ ] **Step 4: Verify RED and register FastMCP tools**
 
-`main()` loads `REMOTE_OBSERVER_CONFIG` or `~/.config/remote-observer-mcp/config.toml` and runs stdio.
+`pyproject.toml` adds `remote-observer-mcp = "remote_observer_mcp.server:main"`. `main()` loads `REMOTE_OBSERVER_CONFIG` or `~/.config/remote-observer-mcp/config.toml` and runs stdio.
 
 - [ ] **Step 5: Add stdio smoke script**
 
@@ -431,7 +430,7 @@ python scripts/smoke_stdio.py
 - [ ] Write failing tests that secret-like paths (`.env`, `*.pem`, `*.key`, configured patterns) never appear in returned diff.
 - [ ] Verify RED.
 - [ ] Implement status/log fixed commands.
-- [ ] Implement diff as a two-stage safe process: enumerate changed paths, remove sensitive paths locally, then request diff only for the remaining paths; do not depend on redaction as the primary defense.
+- [ ] Implement diff with fixed/config-validated Git pathspec exclusions in the same `git diff` invocation; never interpolate filenames discovered from repository output into a second remote command. The SSH transport serializes each validated argv token with POSIX-safe quoting before the remote login shell parses it; redaction remains secondary defense.
 - [ ] Add tests showing Git remote URLs are not requested or returned.
 - [ ] Verify targeted/full tests.
 - [ ] Commit:
