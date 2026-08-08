@@ -40,6 +40,15 @@ class ProcessConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkspaceConfig:
+    workspace_id: str
+    host_id: str
+    root: str
+    secret_patterns: tuple[str, ...] = ()
+    compose: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class HostConfig:
     host_id: str
     transport: str
@@ -66,6 +75,7 @@ class HostConfig:
 @dataclass(frozen=True, slots=True)
 class AppConfig:
     hosts: Mapping[str, HostConfig]
+    workspaces: Mapping[str, WorkspaceConfig]
 
     def host(self, host_id: str) -> HostConfig:
         if not _ID_RE.fullmatch(host_id):
@@ -75,6 +85,14 @@ class AppConfig:
         except KeyError as error:
             raise ObserverError("unknown_host", f"unknown host: {host_id}") from error
 
+    def workspace(self, workspace_id: str) -> WorkspaceConfig:
+        if not _ID_RE.fullmatch(workspace_id):
+            raise ObserverError("unknown_workspace", "unknown workspace")
+        try:
+            return self.workspaces[workspace_id]
+        except KeyError as error:
+            raise ObserverError("unknown_workspace", "unknown workspace") from error
+
 
 def load_config(path: Path) -> AppConfig:
     try:
@@ -83,13 +101,18 @@ def load_config(path: Path) -> AppConfig:
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise ObserverError("invalid_configuration", f"cannot load configuration: {error}") from error
 
-    _ensure_keys(raw, {"hosts"}, "root")
+    _ensure_keys(raw, {"hosts", "workspaces"}, "root")
     hosts_raw = _mapping(raw.get("hosts"), "hosts")
     hosts: dict[str, HostConfig] = {}
     for host_id, host_raw in hosts_raw.items():
         _validate_id(host_id, "host ID")
         hosts[host_id] = _parse_host(host_id, _mapping(host_raw, f"host {host_id}"))
-    return AppConfig(hosts=MappingProxyType(hosts))
+
+    workspaces = _parse_workspaces(raw.get("workspaces", {}), hosts)
+    return AppConfig(
+        hosts=MappingProxyType(hosts),
+        workspaces=workspaces,
+    )
 
 
 def _parse_host(host_id: str, raw: Mapping[str, Any]) -> HostConfig:
@@ -124,6 +147,47 @@ def _parse_host(host_id: str, raw: Mapping[str, Any]) -> HostConfig:
         containers=_parse_containers(raw.get("containers", {}), host_id),
         processes=_parse_processes(raw.get("processes", {}), host_id),
     )
+
+
+def _parse_workspaces(
+    raw: Any,
+    hosts: Mapping[str, HostConfig],
+) -> Mapping[str, WorkspaceConfig]:
+    result: dict[str, WorkspaceConfig] = {}
+    for workspace_id, value in _mapping(raw, "workspaces").items():
+        _validate_id(workspace_id, "workspace ID")
+        section = _mapping(value, f"workspace {workspace_id}")
+        _ensure_keys(
+            section,
+            {"host", "root", "secret_patterns", "compose"},
+            f"workspace {workspace_id}",
+        )
+
+        host_id = section.get("host")
+        if not isinstance(host_id, str) or not _ID_RE.fullmatch(host_id):
+            _invalid(f"workspace {workspace_id}: host must be a logical host ID")
+        if host_id not in hosts:
+            _invalid(f"workspace {workspace_id}: references unknown host")
+
+        root = section.get("root")
+        if not isinstance(root, str) or not _SAFE_PATH_RE.fullmatch(root):
+            _invalid(f"workspace {workspace_id}: root must match the v1 safe absolute-path grammar")
+
+        patterns = section.get("secret_patterns", [])
+        if not isinstance(patterns, list) or not all(isinstance(item, str) for item in patterns):
+            _invalid(f"workspace {workspace_id}: secret_patterns must be an array of strings")
+        if not all(_SECRET_PATTERN_RE.fullmatch(item) for item in patterns):
+            _invalid(f"workspace {workspace_id}: secret_patterns contain unsupported characters")
+
+        compose = _boolean(section.get("compose", False), f"workspace {workspace_id} compose")
+        result[workspace_id] = WorkspaceConfig(
+            workspace_id=workspace_id,
+            host_id=host_id,
+            root=root,
+            secret_patterns=tuple(patterns),
+            compose=compose,
+        )
+    return MappingProxyType(result)
 
 
 def _parse_services(raw: Any, host_id: str) -> Mapping[str, ServiceConfig]:
