@@ -136,7 +136,7 @@ async def test_cross_user_transport_maps_only_existing_tmux_read_commands(monkey
     for command, helper_args in cases:
         await transport.run(command)
         assert observed[-1].argv == (
-            "sudo",
+            "/usr/bin/sudo",
             "-n",
             "-u",
             "emma",
