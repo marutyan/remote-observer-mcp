@@ -97,12 +97,12 @@ def test_helper_environment_is_minimal_and_drops_tmux_influence(monkeypatch):
     assert set(env) == {"HOME", "USER", "LOGNAME", "PATH", "LANG"}
 
 
-def test_deploy_helper_is_python_entrypoint_for_installed_package():
+def test_deploy_helper_uses_isolated_python_entrypoint_for_installed_package():
     script = _ROOT / "deploy" / "remote-observer-tmux-read"
     assert script.exists(), "deployment helper is not implemented"
 
     text = script.read_text(encoding="utf-8")
-    assert text.startswith("#!/opt/remote-observer-mcp/.venv/bin/python\n")
+    assert text.startswith("#!/opt/remote-observer-mcp/.venv/bin/python -I\n")
     assert "remote_observer_mcp.tmux_helper" in text
     assert "sh " not in text
     assert "bash" not in text
