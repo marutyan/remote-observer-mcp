@@ -36,23 +36,25 @@ transport = "local"
             env=env,
         )
 
-        async with stdio_client(parameters) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                listed = await session.list_tools()
-                tools = {tool.name: tool for tool in listed.tools}
-                if set(tools) != _EXPECTED_TOOLS:
-                    raise RuntimeError(f"unexpected MCP tools: {sorted(tools)}")
-                for tool in tools.values():
-                    annotations = tool.annotations
-                    if annotations is None or not annotations.readOnlyHint:
-                        raise RuntimeError(f"tool is not read-only: {tool.name}")
-                    if annotations.destructiveHint is not False:
-                        raise RuntimeError(f"tool may be destructive: {tool.name}")
+        async with (
+            stdio_client(parameters) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            listed = await session.list_tools()
+            tools = {tool.name: tool for tool in listed.tools}
+            if set(tools) != _EXPECTED_TOOLS:
+                raise RuntimeError(f"unexpected MCP tools: {sorted(tools)}")
+            for tool in tools.values():
+                annotations = tool.annotations
+                if annotations is None or not annotations.readOnlyHint:
+                    raise RuntimeError(f"tool is not read-only: {tool.name}")
+                if annotations.destructiveHint is not False:
+                    raise RuntimeError(f"tool may be destructive: {tool.name}")
 
-                result = await session.call_tool("list_hosts", arguments={})
-                if result.isError:
-                    raise RuntimeError("list_hosts returned an MCP error")
+            result = await session.call_tool("list_hosts", arguments={})
+            if result.isError:
+                raise RuntimeError("list_hosts returned an MCP error")
 
 
 def main() -> None:
