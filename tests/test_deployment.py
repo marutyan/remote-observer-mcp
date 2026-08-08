@@ -16,6 +16,7 @@ def test_deployment_uses_tunnel_client_as_stdio_supervisor():
     assert "--control-plane.api-key=file:/etc/remote-observer-mcp/runtime-api-key" in service
     assert "RuntimeDirectory=remote-observer-mcp" in service
     assert "StateDirectory=remote-observer-mcp" in service
+    assert "ConfigurationDirectory=" not in service
     assert not (_REPO_ROOT / "deploy" / "remote-observer-mcp.service").exists()
 
 
