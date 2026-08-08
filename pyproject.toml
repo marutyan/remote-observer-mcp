@@ -19,6 +19,7 @@ dev = [
 
 [project.scripts]
 remote-observer-mcp = "remote_observer_mcp.server:main"
+remote-observer-exec = "remote_observer_mcp.execution.executor:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
